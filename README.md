@@ -1,4 +1,4 @@
-﻿# AeroTwin — Drone Video to 3D Reconstruction Pipeline
+# AeroTwin — Drone Video to 3D Reconstruction Pipeline
 
 <div align="center">
 
@@ -235,15 +235,6 @@ AeroTwin passes `--FeatureExtraction.use_gpu 0` and `--FeatureMatching.use_gpu 0
 
 ---
 
-## Team
-
-**Team Synapse X** — Hack With Vizag 2026
-
-| Name | Role |
-|------|------|
-| **Rohan Malyadri** | Lead Developer and Architecture |
-
----
 
 ## License
 
