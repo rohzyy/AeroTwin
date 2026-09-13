@@ -8,7 +8,7 @@
 ![Team](https://img.shields.io/badge/Team-Synapse_X-purple?style=for-the-badge)
 ![C++17](https://img.shields.io/badge/C%2B%2B-17-orange?style=for-the-badge)
 
-**Built for Hack With Vizag 2026 | Team Synapse X**
+**Built for Hack With Vizag 2026 · Team Synapse X**
 
 *Transform drone footage into photorealistic 3D digital twins — automatically.*
 
@@ -18,14 +18,13 @@
 
 ## Overview
 
-**AeroTwin** is a Windows desktop application that converts raw drone video footage into a complete 3D reconstruction dataset ready for **Gaussian Splatting** and **Neural Radiance Fields (NeRF)** workflows.
+**AeroTwin** converts raw drone video into a complete 3D reconstruction dataset ready for **Gaussian Splatting** and **NeRF** workflows.
 
-Point AeroTwin at any drone video file, set a frame rate, and it handles everything:
-- Frame extraction at the specified FPS via FFmpeg
-- GPS coordinate embedding from DJI SRT telemetry files
-- COLMAP-based Structure-from-Motion (SfM) 3D reconstruction
-- Sparse 3D point cloud and camera pose generation
-- Image undistortion ready for downstream AI/3D pipelines
+- Frame extraction at configurable FPS via FFmpeg
+- GPS coordinate embedding from DJI SRT telemetry
+- COLMAP Structure-from-Motion (SfM) reconstruction
+- Sparse 3D point cloud + camera pose generation
+- Undistorted images ready for downstream AI pipelines
 
 ---
 
@@ -33,12 +32,12 @@ Point AeroTwin at any drone video file, set a frame rate, and it handles everyth
 
 | Feature | Details |
 |---------|---------|
-| **Input** | MP4, AVI, MOV, and any FFmpeg-supported format |
-| **SRT GPS Embed** | Auto-detects DJI SRT telemetry and embeds GPS into EXIF |
-| **Frame Extraction** | Configurable FPS (1–30 fps) via FFmpeg |
-| **3D Reconstruction** | COLMAP SfM (CPU), Agisoft Metashape, RealityScan 2.0 |
-| **Output** | Sparse point cloud, camera poses, undistorted images |
-| **GUI** | Native Win32 GUI — no dependencies, no install required |
+| **Input** | MP4, AVI, MOV — any FFmpeg-supported format |
+| **SRT GPS Embed** | Auto-detects DJI SRT, embeds GPS into JPEG EXIF |
+| **Frame Extraction** | Configurable 1–30 fps via FFmpeg |
+| **3D Reconstruction** | COLMAP SfM (CPU), Metashape, RealityScan 2.0 |
+| **Output** | Point cloud, camera poses, undistorted images |
+| **GUI** | Native Win32 — no install, no dependencies |
 
 ---
 
@@ -46,30 +45,32 @@ Point AeroTwin at any drone video file, set a frame rate, and it handles everyth
 
 ```mermaid
 graph TD
-    A["🚁 AeroTwin — DroneRecon.exe"] --> B["🖥️ GUI Layer\ngui.cpp / gui.h"]
-    A --> C["⚙️ Pipeline Layer\npipeline.cpp / pipeline.h"]
+    APP["AeroTwin — DroneRecon.exe"]
 
-    B --> D["Win32 GUI\n• File / Folder picker\n• Frame rate input\n• Method selector\n• Real-time progress log"]
+    APP --> GUI["GUI Layer\ngui.cpp / gui.h"]
+    APP --> PIPE["Pipeline Layer\npipeline.cpp / pipeline.h"]
 
-    C --> E["📹 FFmpeg\nFrame Extractor"]
-    C --> F["🛰️ GPS / SRT Parser\ngps_embed.h"]
+    GUI --> WIN32["Win32 GUI\nFile picker · FPS input\nMethod selector · Progress log"]
 
-    E --> G["🗂️ Frame Directory\nframes/<video>/<name>_NNNN.jpg"]
-    F --> G
+    PIPE --> FFMPEG["FFmpeg\nFrame Extractor"]
+    PIPE --> GPS["GPS / SRT Parser\ngps_embed.h"]
 
-    G --> H["🔷 3D Reconstruction Engine"]
+    FFMPEG --> FRAMES["Frame Directory\nframes/video/name_NNNN.jpg"]
+    GPS    --> FRAMES
 
-    H --> I["COLMAP SfM\n(bundled, CPU)"]
-    H --> J["Agisoft Metashape\n(optional, external)"]
-    H --> K["RealityScan 2.0\n(optional, external)"]
+    FRAMES --> RECON["3D Reconstruction Engine"]
 
-    I --> L["📦 Output Directory"]
+    RECON --> COLMAP["COLMAP SfM\nbundled · CPU-only"]
+    RECON --> META["Agisoft Metashape\noptional · external"]
+    RECON --> RS["RealityScan 2.0\noptional · external"]
 
-    L --> M["database/database.db"]
-    L --> N["sparse/0/cameras.bin"]
-    L --> O["sparse/0/images.bin"]
-    L --> P["sparse/0/points3D.bin"]
-    L --> Q["images/ (undistorted)"]
+    COLMAP --> OUT["Output Directory"]
+
+    OUT --> DB["database/database.db"]
+    OUT --> C0["sparse/0/cameras.bin"]
+    OUT --> I0["sparse/0/images.bin"]
+    OUT --> P0["sparse/0/points3D.bin"]
+    OUT --> UD["images/  undistorted"]
 ```
 
 ---
@@ -78,36 +79,33 @@ graph TD
 
 ```mermaid
 flowchart TD
-    START(["▶ START\nUser provides Video, Output Dir,\nFPS, Reconstruction Method"])
+    START(["START\nVideo · Output Dir · FPS · Method"])
+    STEP1["STEP 1 — Frame Extraction\nFFmpeg extracts frames at N fps\nOutput: frames/video/name_NNNN.jpg"]
+    CHECK{SRT file\ndetected?}
+    GPS["STEP 1b — GPS Embedding\nParse DJI SRT telemetry\nEmbed GPS into JPEG EXIF via ExifTool"]
+    SKIP["Skip GPS Embedding"]
+    STEP2["STEP 2 — 3D Reconstruction\nKill stale COLMAP processes\nClean previous database and sparse dirs"]
+    FE["2a — Feature Extraction\ncolmap feature_extractor\n--FeatureExtraction.use_gpu 0\n9000 to 15000 SIFT features per image"]
+    FM["2b — Feature Matching\ncolmap exhaustive_matcher\n--FeatureMatching.use_gpu 0\nAll image pairs matched on CPU"]
+    SR["2c — Sparse Reconstruction\ncolmap mapper\nIncremental SfM + Bundle Adjustment\nOutputs: camera poses + 3D point cloud"]
+    UD["2d — Image Undistortion\ncolmap image_undistorter\nReady for NeRF and Gaussian Splatting"]
+    OUT(["OUTPUT\nsparse/0/cameras.bin  — Camera intrinsics\nsparse/0/images.bin   — Camera poses\nsparse/0/points3D.bin — 3D point cloud\nimages/               — Undistorted frames"])
+    GSPLAT["Gaussian Splatting\ngraphdeco-inria/gaussian-splatting"]
+    NERF["NeRF — Luma AI — NeRF Studio"]
 
     START --> STEP1
-
-    STEP1["📹 STEP 1 — Frame Extraction\nFFmpeg extracts frames at N fps\nOutput → frames/<video>/<name>_NNNN.jpg"]
-
-    STEP1 --> SRT_CHECK{SRT file\nfound?}
-
-    SRT_CHECK -- Yes --> GPS["🛰️ STEP 1b — GPS Embedding\nParse DJI SRT telemetry\nEmbed GPS into JPEG EXIF via ExifTool"]
-    SRT_CHECK -- No --> SKIP["⏭ Skip GPS\n(no telemetry file)"]
-
-    GPS --> STEP2
+    STEP1 --> CHECK
+    CHECK -- Yes --> GPS
+    CHECK -- No  --> SKIP
+    GPS  --> STEP2
     SKIP --> STEP2
-
-    STEP2["🔷 STEP 2 — 3D Reconstruction\nKill stale COLMAP processes\nClean previous database & sparse dirs"]
-
-    STEP2 --> FE["2a — Feature Extraction\ncolmap feature_extractor\n--FeatureExtraction.use_gpu 0\n~9,000–15,000 SIFT features per image"]
-
-    FE --> FM["2b — Feature Matching\ncolmap exhaustive_matcher\n--FeatureMatching.use_gpu 0\nAll image pairs matched (CPU brute-force)"]
-
-    FM --> SR["2c — Sparse Reconstruction\ncolmap mapper\nIncremental SfM + Global Bundle Adjustment\nOutputs: camera poses + 3D point cloud"]
-
-    SR --> UD["2d — Image Undistortion\ncolmap image_undistorter\nReady for NeRF / Gaussian Splatting"]
-
+    STEP2 --> FE
+    FE --> FM
+    FM --> SR
+    SR --> UD
     UD --> OUT
-
-    OUT(["✅ OUTPUT\nsparse/0/cameras.bin — Camera intrinsics\nsparse/0/images.bin  — Camera poses\nsparse/0/points3D.bin — 3D point cloud\nimages/               — Undistorted frames"])
-
-    OUT --> GSPLAT["→ Gaussian Splatting\n(graphdeco-inria/gaussian-splatting)"]
-    OUT --> NERF["→ NeRF / Luma AI / NeRF Studio"]
+    OUT --> GSPLAT
+    OUT --> NERF
 ```
 
 ---
@@ -117,22 +115,22 @@ flowchart TD
 ```
 AeroTwin/
 ├── src/
-│   ├── main.cpp          — WinMain entry point
-│   ├── gui.cpp           — Win32 GUI: window, controls, progress log
-│   ├── gui.h             — GUI header
-│   ├── pipeline.cpp      — Core pipeline: FFmpeg, COLMAP, ExifTool orchestration
-│   ├── pipeline.h        — Pipeline function declarations & config
-│   └── gps_embed.h       — DJI SRT parser + EXIF GPS embedding logic
-├── vendor/               — (populated at build time, not committed)
-│   ├── ffmpeg/           — FFmpeg static binary
-│   ├── colmap/           — COLMAP binary (CPU, no CUDA required)
-│   └── exiftool/         — ExifTool binary
-├── build/                — CMake build output
-├── CMakeLists.txt        — Build config (MinGW / MSVC)
-├── BUILD.md              — Detailed build instructions
-├── CHANGELOG.md          — Version history
-├── LICENSE               — MIT License
-└── README.md             — This file
+│   ├── main.cpp        WinMain entry point
+│   ├── gui.cpp         Win32 GUI (window, controls, log)
+│   ├── gui.h           GUI header
+│   ├── pipeline.cpp    Core pipeline orchestration
+│   ├── pipeline.h      Pipeline declarations and config
+│   └── gps_embed.h     DJI SRT parser + EXIF GPS logic
+├── vendor/             Populated at build time (not committed)
+│   ├── ffmpeg/         FFmpeg static binary
+│   ├── colmap/         COLMAP binary (CPU, no CUDA)
+│   └── exiftool/       ExifTool binary
+├── build/              CMake build output
+├── CMakeLists.txt      Build config (MinGW / MSVC)
+├── BUILD.md            Build instructions
+├── CHANGELOG.md        Version history
+├── LICENSE             MIT License
+└── README.md           This file
 ```
 
 ---
@@ -145,7 +143,7 @@ AeroTwin/
 | GCC (MinGW) | 13+ | `scoop install gcc` |
 | CMake | 3.20+ | `scoop install cmake` |
 | Make | Any | `scoop install make` |
-| FFmpeg | Auto | `scoop install ffmpeg` |
+| FFmpeg | Latest | `scoop install ffmpeg` |
 | ExifTool | Latest | `scoop install exiftool` |
 | COLMAP (no-CUDA) | 4.2+ | [GitHub Releases](https://github.com/colmap/colmap/releases) |
 
@@ -161,53 +159,56 @@ AeroTwin/
 ## Build Instructions
 
 ```powershell
-# 1. Clone the repo
+# Clone
 git clone https://github.com/rohzyy/AeroTwin.git
 cd AeroTwin
 
-# 2. Place vendor binaries into build/vendor/
-#    FFmpeg  → build/vendor/ffmpeg/bin/ffmpeg.exe
-#    COLMAP  → build/vendor/colmap/bin/colmap.bat + DLLs
-#    ExifTool→ build/vendor/exiftool/exiftool.exe
+# Place vendor binaries
+#   build/vendor/ffmpeg/bin/ffmpeg.exe
+#   build/vendor/colmap/bin/colmap.bat + DLLs
+#   build/vendor/exiftool/exiftool.exe
 
-# 3. Configure and build
+# Build
 cmake -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release .
 cd build
 make
 
-# 4. Run
+# Run
 .\DroneRecon.exe
 ```
 
-See [BUILD.md](BUILD.md) for detailed step-by-step instructions.
+See [BUILD.md](BUILD.md) for full step-by-step instructions.
 
 ---
 
 ## Usage
 
 1. **Launch** `build/DroneRecon.exe`
-2. **Select Video File** — click "File" and pick your drone `.mp4`
-3. **Select Output Directory** — where results will be saved
+2. **Select Video File** via the "File" button
+3. **Select Output Directory** for results
 4. **Set Frame Rate** — recommended `10.0` fps for a 5–10 s clip
 5. **Choose Method** — select "COLMAP (bundled)"
-6. **Click "Start Processing"** — wait ~10–15 min on CPU
+6. **Click "Start Processing"** — takes ~10–15 min on CPU
 
 ### Output Files
 
+After successful completion, your output directory will contain:
+
 ```
 <output>/
-├── frames/<videoname>/
-│   ├── <videoname>_frame_0001.jpg
-│   └── ...
+├── frames/
+│   └── <videoname>/
+│       ├── <videoname>_frame_0001.jpg
+│       └── ...
 ├── database/
-│   └── database.db          ← COLMAP feature database
+│   └── database.db        COLMAP feature database
 ├── sparse/
 │   └── 0/
-│       ├── cameras.bin      ← Camera intrinsics
-│       ├── images.bin       ← Camera extrinsics (poses)
-│       └── points3D.bin     ← Sparse 3D point cloud
+│       ├── cameras.bin    Camera intrinsics
+│       ├── images.bin     Camera extrinsics (poses)
+│       └── points3D.bin   Sparse 3D point cloud
 └── images/
-    └── *.jpg                ← Undistorted images
+    └── *.jpg              Undistorted images for NeRF/Splat
 ```
 
 ### Using Output with Gaussian Splatting
@@ -224,13 +225,13 @@ python train.py -s <output_directory>
 Each frame yields ~9,000–15,000 SIFT keypoints at 1920×1080. COLMAP uses a `SIMPLE_RADIAL` camera model with focal length estimated from sensor metadata.
 
 ### Exhaustive Feature Matching
-All image pairs are matched — appropriate for short video clips. For longer sequences, `sequential_matcher` or `vocab_tree_matcher` should be used instead.
+All image pairs are matched — suitable for short drone clips. For longer sequences, use `sequential_matcher` or `vocab_tree_matcher`.
 
 ### Incremental Structure-from-Motion
-COLMAP finds the best initial image pair, then progressively registers all cameras using bundle adjustment at each step.
+COLMAP finds the best initial image pair, then progressively registers all cameras with bundle adjustment at each step.
 
 ### CPU-Only Mode
-AeroTwin passes `--FeatureExtraction.use_gpu 0` and `--FeatureMatching.use_gpu 0` to ensure compatibility on any Windows machine without a CUDA GPU.
+AeroTwin passes `--FeatureExtraction.use_gpu 0` and `--FeatureMatching.use_gpu 0` ensuring compatibility on any Windows machine without a CUDA GPU.
 
 ---
 
@@ -240,7 +241,7 @@ AeroTwin passes `--FeatureExtraction.use_gpu 0` and `--FeatureMatching.use_gpu 0
 
 | Name | Role |
 |------|------|
-| **Rohan Malyadri** | Lead Developer & Architecture |
+| **Rohan Malyadri** | Lead Developer and Architecture |
 
 ---
 
@@ -256,5 +257,5 @@ See [LICENSE](LICENSE) for the full text.
 ---
 
 <div align="center">
-Made with ❤️ by Team Synapse X for Hack With Vizag 2026
+Made with love by Team Synapse X for Hack With Vizag 2026
 </div>
